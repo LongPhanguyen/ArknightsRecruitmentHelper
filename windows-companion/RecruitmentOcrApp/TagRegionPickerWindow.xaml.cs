@@ -8,7 +8,7 @@ namespace RecruitmentOcrApp;
 
 public partial class TagRegionPickerWindow : Window
 {
-    private Point _dragStart;
+    private System.Windows.Point _dragStart;
     private bool _isDragging;
 
     // Relative to the source bitmap's top-left, in source pixels -- callers
