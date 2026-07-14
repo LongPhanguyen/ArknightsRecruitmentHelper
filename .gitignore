@@ -23,4 +23,4 @@ local.properties
 *.user
 
 # Local tool config
-.claude/settings.local.json
+.claude/

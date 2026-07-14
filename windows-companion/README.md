@@ -31,10 +31,11 @@ the real first test pass — expect to fix a build error or two.
 
 ## Build & run
 
+Open `ArknightsRecruitmentOcr.sln` in Visual Studio and run `RecruitmentOcrApp`
+as the startup project, or from the command line:
+
 ```
 cd windows-companion
-dotnet new sln -n ArknightsRecruitmentOcr
-dotnet sln add RecruitmentCore/RecruitmentCore.csproj RecruitmentCore.Tests/RecruitmentCore.Tests.csproj RecruitmentOcrApp/RecruitmentOcrApp.csproj
 dotnet build
 dotnet test RecruitmentCore.Tests
 dotnet run --project RecruitmentOcrApp
