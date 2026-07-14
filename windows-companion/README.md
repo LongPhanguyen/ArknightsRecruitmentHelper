@@ -53,6 +53,60 @@ dotnet test RecruitmentCore.Tests
 dotnet run --project RecruitmentOcrApp
 ```
 
+## Distributing a standalone .exe to friends
+
+A publish profile (`RecruitmentOcrApp/Properties/PublishProfiles/win-x64.pubxml`)
+bundles the .NET runtime into a single self-contained `.exe`, so friends don't
+need to install anything to run it:
+
+```
+cd windows-companion
+dotnet publish RecruitmentOcrApp -p:PublishProfile=win-x64
+```
+
+(or in Visual Studio: right-click `RecruitmentOcrApp` → Publish → pick the
+`win-x64` profile). Output lands at:
+
+```
+windows-companion/RecruitmentOcrApp/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish/RecruitmentOcrApp.exe
+```
+
+That's the one file to hand to a friend. A few things worth knowing:
+
+- **File size will be large** (expect somewhere in the 150-250MB range) --
+  the entire .NET + WPF runtime is bundled in, which is the tradeoff for not
+  requiring an install. Not something to fix, just don't be surprised by it.
+- **Trimming is deliberately left off.** WPF apps are broadly known to be
+  fragile under trimming (XAML/BAML loading and data binding lean on
+  reflection that static trimming analysis can strip), and this app's WinRT-
+  projected OCR calls are a second, independent reason to avoid it. This
+  profile doesn't enable `PublishTrimmed` at all, so it defaults to off.
+- **The OCR language pack requirement doesn't go away.** Bundling the .NET
+  runtime has nothing to do with it -- the actual OCR engine/language data
+  lives in Windows itself as an optional OS feature. Each friend still needs
+  one installed (Settings > Time & Language > Language & region > Add a
+  language, with "Optical character recognition" checked), or the app throws
+  on startup for them the same way it would for you without it.
+- **Windows 10 version 2004 (build 19041) or later is the floor**, since
+  that's the WinRT API contract version this project targets (`net8.0-
+  windows10.0.19041.0`). Effectively all actively-updated Windows 10/11
+  machines meet this; a long-unupdated Windows 10 install might not.
+- **No separate .NET runtime or Visual C++ Redistributable install should be
+  needed.** The only native calls this app makes are to `user32.dll`/
+  `gdi32.dll` (always present on Windows) and OS-level WinRT/COM activation
+  for OCR -- neither depends on the VC++ redistributable. I can't verify this
+  by actually running it on a fresh machine, though, so treat it as a
+  reasonably confident expectation rather than a guarantee.
+- **Expect a Windows SmartScreen "Windows protected your PC" warning** the
+  first time a friend runs it, since it's an unsigned executable from an
+  unrecognized publisher. That's normal, not a sign anything's broken --
+  they'll need to click "More info" -> "Run anyway." Getting rid of this
+  warning requires code-signing the executable, which isn't set up here.
+- Some antivirus tools occasionally flag self-extracting single-file .NET
+  publishes (the "unpack embedded files to a temp folder at startup"
+  behavior can look similar to how some malware unpackers behave). Not
+  expected, but worth knowing about if a friend's antivirus complains.
+
 ## Selecting the emulator window
 
 1. Make sure the recruitment tag screen is actually open and visible in the
