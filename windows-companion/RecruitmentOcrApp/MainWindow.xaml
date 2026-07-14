@@ -4,19 +4,10 @@
         Title="Arknights Recruitment OCR" Height="640" Width="420"
         Topmost="True">
     <StackPanel Margin="12">
-        <TextBlock Text="Capture region (screen pixels)" FontWeight="Bold" Margin="0,0,0,4"/>
-        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-            <TextBlock Text="X:" VerticalAlignment="Center"/>
-            <TextBox x:Name="RegionX" Width="50" Margin="4,0" Text="0"/>
-            <TextBlock Text="Y:" VerticalAlignment="Center"/>
-            <TextBox x:Name="RegionY" Width="50" Margin="4,0" Text="0"/>
-            <TextBlock Text="W:" VerticalAlignment="Center"/>
-            <TextBox x:Name="RegionWidth" Width="50" Margin="4,0" Text="800"/>
-            <TextBlock Text="H:" VerticalAlignment="Center"/>
-            <TextBox x:Name="RegionHeight" Width="50" Margin="4,0" Text="80"/>
-        </StackPanel>
+        <Button x:Name="SelectWindowButton" Content="Select Emulator Window" Click="OnSelectWindowClicked" Margin="0,0,0,8"/>
+        <TextBlock x:Name="WindowStatusText" Text="No window selected yet." Margin="0,0,0,8" TextWrapping="Wrap"/>
 
-        <Button x:Name="CaptureButton" Content="Capture Tags" Click="OnCaptureClicked" Margin="0,0,0,12"/>
+        <Button x:Name="CaptureButton" Content="Capture Tags" Click="OnCaptureClicked" Margin="0,0,0,12" IsEnabled="False"/>
 
         <TextBlock x:Name="StatusText" Margin="0,0,0,8" TextWrapping="Wrap"/>
 
