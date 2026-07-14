@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace RecruitmentCore;
 
 // Placeholder dataset -- mirrors the Android project's RecruitmentData.kt 1:1

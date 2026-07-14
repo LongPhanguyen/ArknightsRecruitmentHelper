@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace RecruitmentCore;
 
 // A plain class (not a record) so equality is reference-based -- the same
