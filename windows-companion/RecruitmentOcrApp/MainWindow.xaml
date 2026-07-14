@@ -14,6 +14,16 @@
         <TextBlock Text="Detected tags (uncheck any misreads)" FontWeight="Bold" Margin="0,0,0,4"/>
         <StackPanel x:Name="DetectedTagsPanel" Margin="0,0,0,12"/>
 
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+            <CheckBox x:Name="FourStarFilterCheckBox" Content="Only show 4★+ combos"
+                      Checked="OnRecalculateClicked" Unchecked="OnRecalculateClicked" Margin="0,0,16,0"/>
+            <CheckBox x:Name="RobotWarningCheckBox" Content="Warn on Robot/1★ tag"
+                      Checked="OnRecalculateClicked" Unchecked="OnRecalculateClicked"/>
+        </StackPanel>
+
+        <TextBlock x:Name="RobotWarningText" Foreground="OrangeRed" FontWeight="Bold"
+                   TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed"/>
+
         <Button x:Name="RecalculateButton" Content="Recalculate" Click="OnRecalculateClicked" Margin="0,0,0,12"/>
 
         <TextBlock Text="Results" FontWeight="Bold" Margin="0,0,0,4"/>

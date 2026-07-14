@@ -12,7 +12,6 @@ namespace RecruitmentOcrApp;
 public partial class MainWindow : Window
 {
     private readonly OcrService _ocrService = new();
-    private readonly RecruitmentCalculator _calculator = new(RecruitmentData.AllOperators);
     private readonly Dictionary<int, CheckBox> _tagCheckboxes = new();
 
     private IntPtr _pickedWindowHandle = IntPtr.Zero;
@@ -22,6 +21,12 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        // Set after InitializeComponent (not via XAML IsChecked="True") so the
+        // Checked event's Recalculate() call only fires once every control it
+        // touches is guaranteed to already be connected.
+        FourStarFilterCheckBox.IsChecked = true;
+        RobotWarningCheckBox.IsChecked = true;
     }
 
     private async void OnSelectWindowClicked(object sender, RoutedEventArgs e)
@@ -138,22 +143,23 @@ public partial class MainWindow : Window
             .Select(cb => (int)cb.Tag)
             .ToHashSet();
 
-        var selectedTags = RecruitmentData.AllTags.Where(t => selectedIds.Contains(t.Id)).ToList();
+        UpdateRobotWarning(selectedIds);
 
-        var combos = selectedTags.Count == 0
-            ? new List<TagCombo>()
-            : _calculator.Evaluate(selectedTags);
-
-        ResultsList.ItemsSource = combos.Select(FormatCombo).ToList();
+        ResultsList.ItemsSource = FourStarFilterCheckBox.IsChecked == true
+            ? TagRarityRules.FindQualifyingCombos(selectedIds).Select(FormatComboEntry).ToList()
+            : RecruitmentData.AllTags.Where(t => selectedIds.Contains(t.Id)).Select(t => t.Name).ToList();
     }
 
-    private static string FormatCombo(TagCombo combo)
+    private void UpdateRobotWarning(IReadOnlyCollection<int> selectedIds)
     {
-        var names = string.Join(" + ", combo.Tags.Select(t => t.Name));
-        var rarity = combo.FloorRarity == combo.CeilingRarity
-            ? $"{combo.FloorRarity}★"
-            : $"{combo.FloorRarity}★-{combo.CeilingRarity}★";
-        var label = combo.IsGuaranteed ? "Guaranteed" : "Possible";
-        return $"{names}: {label} {rarity}";
+        var shouldWarn = RobotWarningCheckBox.IsChecked == true && TagRarityRules.HasRobotTag(selectedIds);
+        RobotWarningText.Visibility = shouldWarn ? Visibility.Visible : Visibility.Collapsed;
+        RobotWarningText.Text = shouldWarn ? "⚠ Contains Robot tag — likely low value." : string.Empty;
+    }
+
+    private static string FormatComboEntry(ComboRarityEntry entry)
+    {
+        var names = string.Join(" + ", entry.TagIds.Select(id => RecruitmentData.AllTags.First(t => t.Id == id).Name));
+        return $"{names}: Guaranteed {entry.Rarity}★";
     }
 }

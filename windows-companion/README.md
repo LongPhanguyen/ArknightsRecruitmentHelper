@@ -6,26 +6,30 @@ tag vocabulary, not any hardcoded label text), and tracks that window (by
 handle, falling back to title match if it restarts) so future captures find
 the right region even after the window moves or resizes. OCRs the captured
 region with Windows' built-in text recognition, matches the result against
-the known tag list, and runs the same recruitment-combo ranking logic as the
-Android app.
+the known tag list, and surfaces which detected tags form a real
+rarity-guaranteeing combo per Arknights' actual recruitment mechanics.
 
 **Verified building and running on Windows**, including the one-click window
-picker (fixed a couple of real build errors along the way — see git history).
-**Automatic tag-region detection (`TagRegionDetector.cs`) is new and has not
-been build/run-tested yet** — everything else in this list has been. Treat
-the next build as the real first test pass for this part specifically.
+picker and automatic tag-region detection (fixed a couple of real build/logic
+errors along the way — see git history). **The rarity-combo toggles
+(`TagRarityRules.cs`) are new and have not been build/run-tested yet** —
+everything else in this list has been. Treat the next build as the real first
+test pass for this part specifically.
 
 ## Projects
 
 - `RecruitmentCore` — platform-agnostic library: `Tag`, `Operator`,
   `RecruitmentData` (placeholder data, mirrors the Android project's data 1:1),
-  and `RecruitmentCalculator` (the enumerate/score/rank algorithm).
-- `RecruitmentCore.Tests` — xUnit test reproducing the same 5-star-combo
-  scenario as the Android test.
+  `RecruitmentCalculator` (an operator-roster-based combo evaluator — not
+  currently used by the OCR app since we don't have a real operator roster;
+  kept for when one's available), and `TagRarityRules` (the real, static
+  tag-combo → guaranteed-rarity table this app actually uses).
+- `RecruitmentCore.Tests` — xUnit tests covering both the calculator and the
+  rarity rules (including the supersede/dedup logic for overlapping combos).
 - `RecruitmentOcrApp` — WPF app: window picking (`WindowPicker.cs` +
   `Win32Interop.cs`), automatic tag-region detection (`TagRegionDetector.cs`),
   screen capture (GDI `CopyFromScreen`), OCR (`Windows.Media.Ocr`), tag
-  matching, and the main UI.
+  matching, rarity-combo filtering, and the main UI.
 
 ## Prerequisites
 
@@ -69,8 +73,34 @@ dotnet run --project RecruitmentOcrApp
    the stored region relative to its *current* position, so moving/resizing
    the window doesn't break capture.
 
+## Rarity-combo toggles
+
+The "Results" list reflects real Arknights recruitment mechanics, not a raw
+tag dump:
+
+- **"Only show 4★+ combos"** (default on): cross-references the detected tags
+  against `TagRarityRules`' static combo table and shows only the tag subsets
+  that guarantee 4★, 5★, or 6★ — a lone detected tag with no qualifying
+  partner isn't shown, since it doesn't guarantee anything by itself. When a
+  larger matching subset (e.g. a 3-tag combo) supersedes a smaller one (e.g.
+  its own 2-tag subset) with a better guarantee, only the better one is
+  shown. Turning this off just lists the raw detected tag names instead, with
+  no filtering.
+- **"Warn on Robot/1★ tag"** (default on, independent of the toggle above):
+  shows a standalone warning banner if the Robot tag was detected, rather
+  than folding it into the combo display.
+
 ## Known limitations / next steps
 
+- `TagRarityRules.KnownCombos` was transcribed by visually reading a
+  compressed reference image's color-coded cells (orange = 5★ pair, purple =
+  4★ pair, on top of purple-anchor tags already guaranteeing 4★ alone). Two
+  individual cells were initially misread and corrected after conflicting
+  with confirmed examples (`Slow + Caster` and `Slow + Healing` are both 4★,
+  not 5★) — the rest of the table hasn't been independently re-verified
+  beyond those two corrections and the one explicit `DPS + Defense = 5★`
+  confirmation. If a combo's shown rarity doesn't match what actually happens
+  in-game, that transcription is the first place to check.
 - Tag matching (`TagMatcher.cs`) compares whole word sequences (not raw
   substrings), so distinct tags that happen to overlap textually (e.g.
   Support/Supporter, Guard/Vanguard) no longer both match when only one is on
