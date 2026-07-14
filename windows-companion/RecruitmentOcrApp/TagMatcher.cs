@@ -24,7 +24,7 @@ public static class TagMatcher
             .ToList();
     }
 
-    private static bool ContainsSequence(IReadOnlyList<string> haystack, IReadOnlyList<string> needle)
+    internal static bool ContainsSequence(IReadOnlyList<string> haystack, IReadOnlyList<string> needle)
     {
         if (needle.Count == 0) return false;
 
@@ -45,7 +45,7 @@ public static class TagMatcher
         return false;
     }
 
-    private static List<string> Tokenize(string text) =>
+    internal static List<string> Tokenize(string text) =>
         text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
             .Select(Normalize)
             .Where(token => token.Length > 0)

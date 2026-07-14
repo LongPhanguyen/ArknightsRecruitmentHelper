@@ -34,24 +34,28 @@ public partial class MainWindow : Window
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             var picked = await WindowPicker.WaitForClickAsync(cts.Token);
 
+            WindowStatusText.Text = $"Window picked: \"{picked.Title}\". Detecting tag region...";
+
             var clientRect = ToRectangle(Win32Interop.GetClientScreenRect(picked.Handle));
-
             using var windowBitmap = ScreenCapture.CaptureRegion(clientRect);
-            var pickerWindow = new TagRegionPickerWindow(windowBitmap) { Owner = this };
-            var confirmed = pickerWindow.ShowDialog();
 
-            if (confirmed != true)
+            var lines = await _ocrService.RecognizeLinesAsync(windowBitmap);
+            var detectedRegion = TagRegionDetector.DetectTagRegion(lines);
+
+            if (detectedRegion is null)
             {
-                WindowStatusText.Text = "Window selection cancelled.";
+                WindowStatusText.Text =
+                    "Could not automatically find the tag area -- no recognizable tags were read from " +
+                    "this window. Make sure the recruitment tag screen is open and visible, then try again.";
                 return;
             }
 
             _pickedWindowHandle = picked.Handle;
             _pickedWindowTitle = picked.Title;
-            _tagRegionOffset = pickerWindow.SelectedRegion;
+            _tagRegionOffset = detectedRegion.Value;
 
             WindowStatusText.Text =
-                $"Window selected: \"{picked.Title}\". Tag region set ({_tagRegionOffset.Width}x{_tagRegionOffset.Height}).";
+                $"Window selected: \"{picked.Title}\". Tag region auto-detected ({_tagRegionOffset.Width}x{_tagRegionOffset.Height}).";
             CaptureButton.IsEnabled = true;
         }
         catch (OperationCanceledException)
