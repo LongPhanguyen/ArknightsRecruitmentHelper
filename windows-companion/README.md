@@ -148,8 +148,20 @@ select the window again**, before assuming it's a code problem.
 
 ## Reliability: retries and diagnostics
 
-Two independent issues were found during testing and fixed:
+Three independent issues were found during testing and fixed:
 
+- **A bigger emulator window could make region detection pick up the wrong
+  area entirely.** Region detection used to union *every* tag-name match
+  found anywhere in the window, with no regard for how far apart they were.
+  A bigger window shows more surface area, raising the odds that some
+  unrelated on-screen text elsewhere happens to match a tag name too (a
+  menu, an operator list, anything) -- one stray match far from the real
+  tag grid would drag the union out into a wrong, oversized region. Fixed
+  by clustering matches by spatial proximity and using only the largest
+  tight cluster, discarding anything far away as noise. The proximity
+  threshold (and the region's padding) scale with the matched text's own
+  size rather than a fixed pixel value, so this behaves consistently
+  whether the window is small or large.
 - **A hyphenated tag like `DP-Recovery` could get silently dropped from
   region detection.** OCR sometimes recognizes it as two separate lines
   ("DP" and "Recovery") rather than one. The detector used to check each
