@@ -48,6 +48,7 @@ public partial class MainWindow : Window
             var picked = await WindowPicker.WaitForClickAsync(cts.Token);
 
             WindowStatusText.Text = $"Window picked: \"{picked.Title}\". Detecting tag region...";
+            AppendDiagnostic($"[Select] picked window: {DescribeWindow(picked.Handle)}");
             var clientRect = ToRectangle(Win32Interop.GetClientScreenRect(picked.Handle));
 
             // The loop always runs at least once (MaxAttempts >= 1), so these
@@ -114,6 +115,7 @@ public partial class MainWindow : Window
                 return;
             }
             _pickedWindowHandle = hwnd;
+            AppendDiagnostic($"[Capture] resolved window: {DescribeWindow(hwnd)}");
 
             var clientRect = Win32Interop.GetClientScreenRect(hwnd);
             var region = new Rectangle(
@@ -162,6 +164,27 @@ public partial class MainWindow : Window
 
     private static string FormatRegion(Rectangle? region) =>
         region is { } r ? $"({r.X},{r.Y},{r.Width}x{r.Height})" : "(none)";
+
+    private static string FormatRect(Win32Interop.RECT r) =>
+        $"({r.Left},{r.Top},{r.Right - r.Left}x{r.Bottom - r.Top})";
+
+    // Everything needed to sanity-check the region math: is this literally
+    // the same OS window both times (hwnd), what are its real screen bounds,
+    // and which monitor is it on -- lets a positional mismatch between two
+    // captures be diagnosed as "window moved" vs. "wrong window tracked" vs.
+    // "multi-monitor/DPI coordinate mismatch".
+    private static string DescribeWindow(IntPtr hwnd)
+    {
+        var windowRect = Win32Interop.GetWindowScreenRect(hwnd);
+        var clientRect = Win32Interop.GetClientScreenRect(hwnd);
+        var monitorBounds = Win32Interop.GetMonitorBounds(hwnd);
+        var className = Win32Interop.GetClassNameOf(hwnd);
+        var title = Win32Interop.GetWindowTitle(hwnd);
+
+        return $"hwnd=0x{hwnd.ToInt64():X}, class=\"{className}\", title=\"{title}\", " +
+               $"windowRect={FormatRect(windowRect)}, clientRect(screen)={FormatRect(clientRect)}, " +
+               $"monitor={(monitorBounds is { } m ? FormatRect(m) : "unknown")}";
+    }
 
     private void AppendDiagnostic(string message)
     {
