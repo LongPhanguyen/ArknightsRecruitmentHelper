@@ -245,18 +245,28 @@ public partial class MainWindow : Window
 
         UpdateRobotWarning(selectedIds);
 
+        var qualifyingCombos = TagRarityRules.FindQualifyingCombos(selectedIds);
+
         ResultsList.ItemsSource = FourStarFilterCheckBox.IsChecked == true
-            ? TagRarityRules.FindQualifyingCombos(selectedIds).Select(FormatComboEntry).ToList()
+            ? qualifyingCombos.Select(FormatComboEntry).ToList()
             : RecruitmentData.AllTags.Where(t => selectedIds.Contains(t.Id)).Select(t => t.Name).ToList();
 
-        // Independent of the 4-star filter above -- this answers "what
-        // could actually come from these tags," not "which subset
-        // guarantees a rarity floor," so it's not filtered the same way.
-        PossibleOperatorsList.ItemsSource = OperatorLookup.FindPossibleOperators(OperatorDatabase.AllOperators, selectedIds)
-            .OrderByDescending(o => o.Rarity)
-            .ThenBy(o => o.Name)
-            .Select(o => $"{o.Name} ({o.Rarity}★)")
-            .ToList();
+        // Only worth showing when the selection actually guarantees a
+        // 4-star+ outcome -- without that, any random 1-2 star operator
+        // could technically match, which isn't useful/actionable
+        // information. Collapsing the whole section (not just clearing the
+        // list) when empty lets the window shrink back down instead of
+        // sitting on unused space.
+        var possibleOperators = qualifyingCombos.Count > 0
+            ? OperatorLookup.FindPossibleOperators(OperatorDatabase.AllOperators, selectedIds)
+                .OrderByDescending(o => o.Rarity)
+                .ThenBy(o => o.Name)
+                .Select(o => $"{o.Name} ({o.Rarity}★)")
+                .ToList()
+            : new List<string>();
+
+        PossibleOperatorsList.ItemsSource = possibleOperators;
+        PossibleOperatorsSection.Visibility = possibleOperators.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void UpdateRobotWarning(IReadOnlyCollection<int> selectedIds)

@@ -23,22 +23,29 @@ public sealed record TagRegionDetectionResult(Rectangle? Region, int MatchedTagC
 // relative to their own centroid. If unrelated on-screen text elsewhere in
 // the window happens to match a tag name too (more likely the bigger/more
 // content-filled the window is), a blind union across every match would get
-// dragged out to include that stray match. So instead of unioning
-// everything, matches whose distance from the overall centroid is a clear
-// outlier get dropped before computing the region.
+// dragged out to include that stray match. So outlier removal only runs
+// when there are MORE matches than the known 5-tag cap allows -- that's the
+// actual signal something is spurious. With 5 or fewer matches, all of them
+// are kept unconditionally: Arknights never shows more than 5 tags, so a
+// set already at or under that cap needs no second-guessing, however spread
+// out it looks. (An earlier version always ran outlier removal, which
+// backfired on small windows: individually tiny chips with proportionally
+// large gaps between grid columns could make a perfectly real tag look like
+// a statistical outlier relative to the rest.)
 //
-// This is deliberately centroid-based rather than strict pairwise
-// nearest-neighbor clustering: on a very small window, individual tag chips
-// can be tiny while the gaps between grid columns stay proportionally large
-// (spacing doesn't always shrink at the same rate as the text/chips do), and
-// a pairwise "are these two touching within a small margin" test can
-// misfire and split the real grid into uneven pieces -- discarding a whole
-// side of the grid if only the largest piece is kept. Distance-from-the-
-// whole-group's-center doesn't have that failure mode: every real tag stays
-// close to the *group's* center even if adjacent chips aren't close to each
-// other individually.
+// When outlier removal does run, it's centroid-based rather than strict
+// pairwise nearest-neighbor clustering: distance-from-the-whole-group's-
+// center doesn't depend on any one pair being close, so it isn't thrown off
+// by uneven spacing the way a pairwise "are these two touching" test is.
 public static class TagRegionDetector
 {
+    // Arknights recruitment never shows more than 5 tag slots. Outlier
+    // removal should only kick in when there's actual evidence of a stray
+    // match -- i.e. more matches than could possibly all be real -- rather
+    // than always second-guessing the spread of a set that's already at or
+    // under the known cap.
+    private const int MaxRealTags = 5;
+
     public static TagRegionDetectionResult DetectTagRegion(IReadOnlyList<OcrWordResult> words)
     {
         var wordTokens = words
@@ -66,7 +73,9 @@ public static class TagRegionDetector
 
         if (matchedRects.Count == 0) return new TagRegionDetectionResult(null, 0);
 
-        var inliers = RemoveDistantOutliers(matchedRects);
+        var inliers = matchedRects.Count > MaxRealTags
+            ? RemoveDistantOutliers(matchedRects)
+            : matchedRects;
 
         // Padding scales with the matched text's own size for the same
         // scale-independence reason -- a fixed pixel value that looks right

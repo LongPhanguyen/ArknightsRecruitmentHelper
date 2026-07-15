@@ -157,21 +157,25 @@ Three independent issues were found during testing and fixed:
   to union *every* tag-name match found anywhere in the window, with no
   regard for how far apart they were -- on a bigger window, unrelated
   on-screen text elsewhere could coincidentally match a tag name and drag
-  the union out into a wrong, oversized region. The first fix (clustering
-  matches that are close to each other, keeping only the largest cluster)
-  overcorrected on very small windows: tiny chips with proportionally large
-  gaps between grid columns could get split into uneven clusters, silently
-  discarding a whole side of the grid (e.g. the left column) since only the
-  largest cluster survived. Replaced with a centroid-based approach instead:
-  drop matches whose distance from the *whole group's* center is a clear
-  outlier (more than 3x the group's own median spread), rather than
-  requiring each match to be close to its *individual* neighbors. A real
-  tag grid stays close to its own center as a whole even when adjacent
-  chips aren't close to each other individually, so this doesn't have the
-  small-window failure mode the pairwise version did, while still
-  correctly dropping a genuinely far-away stray match. Both the outlier
-  threshold and the region's padding scale with the matched group's own
-  size rather than a fixed pixel value.
+  the union out into a wrong, oversized region. Two follow-on attempts at a
+  fix each overcorrected in turn:
+  - Pairwise proximity clustering (keep only the largest cluster) broke on
+    very small windows: tiny chips with proportionally large gaps between
+    grid columns could split into uneven clusters, silently discarding a
+    whole side of the grid.
+  - Always-on centroid-distance outlier removal (drop anything more than 3x
+    the group's median spread from center) fixed that, but could still
+    misfire and drop a single legitimate tag whenever the 5-tag grid's
+    natural spread made one corner look statistically distant from the rest
+    -- still guessing at a threshold rather than using what's actually known.
+  - The fix that stuck: **only run outlier removal when there are *more*
+    matches than the known 5-tag cap allows.** With 5 or fewer matches,
+    there's no evidence anything is spurious, so all of them are kept
+    unconditionally -- Arknights never shows more than 5 tags, so a set
+    already at or under that cap needs no second-guessing regardless of how
+    spread out it looks. Outlier removal (still centroid-based, for the same
+    reasons as before) only kicks in once there's real evidence of a stray
+    match, i.e. more matches than could possibly all be real.
 - **A hyphenated tag like `DP-Recovery` could get silently dropped from
   region detection.** OCR sometimes recognizes it as two separate lines
   ("DP" and "Recovery") rather than one. The detector used to check each
@@ -206,11 +210,16 @@ Three independent issues were found during testing and fixed:
 `OperatorLookup.FindPossibleOperators` takes a detected tag set and returns
 every operator in `OperatorDatabase.AllOperators` whose own tags are fully
 contained within it — i.e. operators that could actually appear in that
-recruitment. Now wired into the UI: the "Possible Operators" list shows
-these, sorted by rarity, updating alongside the Results list whenever tags
-are toggled. It's independent of the "Only show 4★+ combos" toggle, since
-it answers a different question ("what could actually come from these
-tags") than the rarity-combo filter does.
+recruitment. Wired into the UI as the "Possible Operators" list, sorted by
+rarity, updating alongside the Results list whenever tags are toggled.
+
+**Gated on an actual guaranteed 4★+ combo existing** (checked via
+`TagRarityRules.FindQualifyingCombos`, independent of whatever the "Only
+show 4★+ combos" checkbox happens to be set to) — without a guarantee, any
+random 1-2★ operator could technically match the selection, which isn't
+useful information. When there's nothing to show, the whole section
+(header + list) collapses rather than just showing an empty list, and the
+window (which sizes to its content) shrinks back down accordingly.
 
 **`OperatorDatabase.AllOperators` is now real data** (149 operators,
 currently recruitable on Global), loaded from an embedded JSON resource
