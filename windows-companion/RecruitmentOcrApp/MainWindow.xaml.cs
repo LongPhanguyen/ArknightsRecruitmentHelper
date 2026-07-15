@@ -248,6 +248,15 @@ public partial class MainWindow : Window
         ResultsList.ItemsSource = FourStarFilterCheckBox.IsChecked == true
             ? TagRarityRules.FindQualifyingCombos(selectedIds).Select(FormatComboEntry).ToList()
             : RecruitmentData.AllTags.Where(t => selectedIds.Contains(t.Id)).Select(t => t.Name).ToList();
+
+        // Independent of the 4-star filter above -- this answers "what
+        // could actually come from these tags," not "which subset
+        // guarantees a rarity floor," so it's not filtered the same way.
+        PossibleOperatorsList.ItemsSource = OperatorLookup.FindPossibleOperators(OperatorDatabase.AllOperators, selectedIds)
+            .OrderByDescending(o => o.Rarity)
+            .ThenBy(o => o.Name)
+            .Select(o => $"{o.Name} ({o.Rarity}★)")
+            .ToList();
     }
 
     private void UpdateRobotWarning(IReadOnlyCollection<int> selectedIds)

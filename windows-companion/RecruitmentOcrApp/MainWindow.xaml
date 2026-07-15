@@ -30,6 +30,9 @@
             <TextBlock Text="Results" FontWeight="Bold" Margin="0,0,0,4"/>
             <ListBox x:Name="ResultsList" Height="180" Margin="0,0,0,12"/>
 
+            <TextBlock Text="Possible Operators (tags fully match the selection)" FontWeight="Bold" Margin="0,0,0,4"/>
+            <ListBox x:Name="PossibleOperatorsList" Height="140" Margin="0,0,0,12"/>
+
             <TextBlock Text="Diagnostics (raw OCR text / region bounds per attempt)" FontWeight="Bold" Margin="0,0,0,4"/>
             <TextBox x:Name="DiagnosticsText" IsReadOnly="True" TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto" Height="160"

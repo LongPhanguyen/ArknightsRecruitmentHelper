@@ -10,11 +10,14 @@ the known tag list, and surfaces which detected tags form a real
 rarity-guaranteeing combo per Arknights' actual recruitment mechanics.
 
 **Verified building and running on Windows**, including publishing a
-standalone .exe. **The word-level capture-region fix, retry logic,
-diagnostics panel, and the new embedded operator database (this round's and
-the previous round's changes) have not been build/run-tested yet** —
-everything else in this list has been. Treat the next build as the real
-first test pass for this part specifically.
+standalone .exe, and the window-picking/capture-region pipeline has been
+through several rounds of real testing and fixes (see "Reliability" below).
+**Not yet tested by the user specifically: the rarity-combo toggles, the
+Robot warning, and the new "Possible Operators" list.** The most recent
+region-detection fix (centroid-based outlier removal, replacing the
+pairwise-clustering approach that had a small-window failure mode) is also
+unverified. Treat the next build as the real first test pass for those
+parts specifically.
 
 ## Projects
 
@@ -203,7 +206,11 @@ Three independent issues were found during testing and fixed:
 `OperatorLookup.FindPossibleOperators` takes a detected tag set and returns
 every operator in `OperatorDatabase.AllOperators` whose own tags are fully
 contained within it — i.e. operators that could actually appear in that
-recruitment. Groundwork only so far — not wired into the UI yet.
+recruitment. Now wired into the UI: the "Possible Operators" list shows
+these, sorted by rarity, updating alongside the Results list whenever tags
+are toggled. It's independent of the "Only show 4★+ combos" toggle, since
+it answers a different question ("what could actually come from these
+tags") than the rarity-combo filter does.
 
 **`OperatorDatabase.AllOperators` is now real data** (149 operators,
 currently recruitable on Global), loaded from an embedded JSON resource
