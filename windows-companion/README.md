@@ -150,18 +150,25 @@ select the window again**, before assuming it's a code problem.
 
 Three independent issues were found during testing and fixed:
 
-- **A bigger emulator window could make region detection pick up the wrong
-  area entirely.** Region detection used to union *every* tag-name match
-  found anywhere in the window, with no regard for how far apart they were.
-  A bigger window shows more surface area, raising the odds that some
-  unrelated on-screen text elsewhere happens to match a tag name too (a
-  menu, an operator list, anything) -- one stray match far from the real
-  tag grid would drag the union out into a wrong, oversized region. Fixed
-  by clustering matches by spatial proximity and using only the largest
-  tight cluster, discarding anything far away as noise. The proximity
-  threshold (and the region's padding) scale with the matched text's own
-  size rather than a fixed pixel value, so this behaves consistently
-  whether the window is small or large.
+- **Window size affecting which tags get picked up.** Region detection used
+  to union *every* tag-name match found anywhere in the window, with no
+  regard for how far apart they were -- on a bigger window, unrelated
+  on-screen text elsewhere could coincidentally match a tag name and drag
+  the union out into a wrong, oversized region. The first fix (clustering
+  matches that are close to each other, keeping only the largest cluster)
+  overcorrected on very small windows: tiny chips with proportionally large
+  gaps between grid columns could get split into uneven clusters, silently
+  discarding a whole side of the grid (e.g. the left column) since only the
+  largest cluster survived. Replaced with a centroid-based approach instead:
+  drop matches whose distance from the *whole group's* center is a clear
+  outlier (more than 3x the group's own median spread), rather than
+  requiring each match to be close to its *individual* neighbors. A real
+  tag grid stays close to its own center as a whole even when adjacent
+  chips aren't close to each other individually, so this doesn't have the
+  small-window failure mode the pairwise version did, while still
+  correctly dropping a genuinely far-away stray match. Both the outlier
+  threshold and the region's padding scale with the matched group's own
+  size rather than a fixed pixel value.
 - **A hyphenated tag like `DP-Recovery` could get silently dropped from
   region detection.** OCR sometimes recognizes it as two separate lines
   ("DP" and "Recovery") rather than one. The detector used to check each
