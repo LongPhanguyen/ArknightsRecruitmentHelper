@@ -133,6 +133,19 @@ That's the one file to hand to a friend. A few things worth knowing:
    the stored region relative to its *current* position, so moving/resizing
    the window doesn't break capture.
 
+## If fewer than 5 tags are detected: check the window size first
+
+Confirmed via a saved debug screenshot: if the emulator window is too
+short to display the *entire* recruitment popup (all 5 tags down through
+the Cost/Confirm buttons), the missing tags simply never get rendered in
+the window at all — they're not there to capture, not a bug in the
+region/OCR logic. Window-bounds logging (hwnd, window rect, client rect,
+monitor bounds) confirmed the region math itself is correct in this case;
+the debug screenshot showed content cutting off immediately after the
+first row of tags, with no space below for the rest of the popup. **Resize
+or maximize the emulator window so the whole popup is visible, then
+select the window again**, before assuming it's a code problem.
+
 ## Reliability: retries and diagnostics
 
 Two independent issues were found during testing and fixed:

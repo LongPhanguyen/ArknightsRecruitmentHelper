@@ -90,7 +90,9 @@ public partial class MainWindow : Window
                 ? $"Window selected: \"{picked.Title}\". Tag region auto-detected " +
                   $"({_tagRegionOffset.Width}x{_tagRegionOffset.Height})."
                 : $"Window selected: \"{picked.Title}\", but only found {detectionResult.MatchedTagCount}/{ExpectedTagCount} " +
-                  "tags after retrying -- the region may be undersized. Try again if captures keep missing a tag.";
+                  "tags after retrying. Most likely cause: the emulator window is too small/short to show the " +
+                  "whole recruitment popup -- try resizing or maximizing it so all 5 tags AND the Cost/Confirm " +
+                  "buttons beneath them are visible, then select the window again.";
         }
         catch (OperationCanceledException)
         {
@@ -151,7 +153,8 @@ public partial class MainWindow : Window
             StatusText.Text = detected.Count == 0
                 ? $"No known tags recognized. Raw OCR text: \"{text}\""
                 : detected.Count < ExpectedTagCount
-                    ? $"Detected {detected.Count}/{ExpectedTagCount} tag(s) after retrying -- one may have been missed."
+                    ? $"Detected {detected.Count}/{ExpectedTagCount} tag(s) after retrying. If the emulator window is " +
+                      "too small/short to show all 5 tags on screen, resizing it and re-selecting the window is the fix."
                     : $"Detected {detected.Count} tag(s).";
         }
         catch (Exception ex)
