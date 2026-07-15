@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using RecruitmentCore;
@@ -11,8 +12,15 @@ namespace RecruitmentOcrApp;
 
 public partial class MainWindow : Window
 {
+    // Arknights recruitment always shows exactly 5 tag slots.
+    private const int ExpectedTagCount = 5;
+    private const int MaxAttempts = 3;
+    private const int RetryDelayMs = 300;
+    private const int MaxDiagnosticEntries = 30;
+
     private readonly OcrService _ocrService = new();
     private readonly Dictionary<int, CheckBox> _tagCheckboxes = new();
+    private readonly Queue<string> _diagnosticEntries = new();
 
     private IntPtr _pickedWindowHandle = IntPtr.Zero;
     private string _pickedWindowTitle = string.Empty;
@@ -40,14 +48,27 @@ public partial class MainWindow : Window
             var picked = await WindowPicker.WaitForClickAsync(cts.Token);
 
             WindowStatusText.Text = $"Window picked: \"{picked.Title}\". Detecting tag region...";
-
             var clientRect = ToRectangle(Win32Interop.GetClientScreenRect(picked.Handle));
-            using var windowBitmap = ScreenCapture.CaptureRegion(clientRect);
 
-            var lines = await _ocrService.RecognizeLinesAsync(windowBitmap);
-            var detectedRegion = TagRegionDetector.DetectTagRegion(lines);
+            // The loop always runs at least once (MaxAttempts >= 1), so these
+            // start with a definite "nothing found yet" result rather than
+            // null, keeping the post-loop checks unambiguous.
+            var detectionResult = new TagRegionDetectionResult(null, 0);
+            for (var attempt = 1; attempt <= MaxAttempts; attempt++)
+            {
+                using var attemptBitmap = ScreenCapture.CaptureRegion(clientRect);
+                var words = await _ocrService.RecognizeWordsAsync(attemptBitmap);
+                detectionResult = TagRegionDetector.DetectTagRegion(words);
 
-            if (detectedRegion is null)
+                AppendDiagnostic(
+                    $"[Select attempt {attempt}/{MaxAttempts}] matched {detectionResult.MatchedTagCount}/{ExpectedTagCount} tags, " +
+                    $"region={FormatRegion(detectionResult.Region)}\nwords: {string.Join(" | ", words.Select(w => w.Text))}");
+
+                if (detectionResult.MatchedTagCount >= ExpectedTagCount) break;
+                if (attempt < MaxAttempts) await Task.Delay(RetryDelayMs);
+            }
+
+            if (detectionResult.Region is not { } region)
             {
                 WindowStatusText.Text =
                     "Could not automatically find the tag area -- no recognizable tags were read from " +
@@ -57,11 +78,14 @@ public partial class MainWindow : Window
 
             _pickedWindowHandle = picked.Handle;
             _pickedWindowTitle = picked.Title;
-            _tagRegionOffset = detectedRegion.Value;
-
-            WindowStatusText.Text =
-                $"Window selected: \"{picked.Title}\". Tag region auto-detected ({_tagRegionOffset.Width}x{_tagRegionOffset.Height}).";
+            _tagRegionOffset = region;
             CaptureButton.IsEnabled = true;
+
+            WindowStatusText.Text = detectionResult.MatchedTagCount >= ExpectedTagCount
+                ? $"Window selected: \"{picked.Title}\". Tag region auto-detected " +
+                  $"({_tagRegionOffset.Width}x{_tagRegionOffset.Height})."
+                : $"Window selected: \"{picked.Title}\", but only found {detectionResult.MatchedTagCount}/{ExpectedTagCount} " +
+                  "tags after retrying -- the region may be undersized. Try again if captures keep missing a tag.";
         }
         catch (OperationCanceledException)
         {
@@ -98,15 +122,30 @@ public partial class MainWindow : Window
                 _tagRegionOffset.Width,
                 _tagRegionOffset.Height);
 
-            using var bitmap = ScreenCapture.CaptureRegion(region);
-            var text = await _ocrService.RecognizeAsync(bitmap);
-            var detected = TagMatcher.Match(text);
+            IReadOnlyList<Tag> detected = Array.Empty<Tag>();
+            var text = string.Empty;
+
+            for (var attempt = 1; attempt <= MaxAttempts; attempt++)
+            {
+                using var bitmap = ScreenCapture.CaptureRegion(region);
+                text = await _ocrService.RecognizeAsync(bitmap);
+                detected = TagMatcher.Match(text);
+
+                AppendDiagnostic(
+                    $"[Capture attempt {attempt}/{MaxAttempts}] region={FormatRegion(region)}, " +
+                    $"matched {detected.Count}/{ExpectedTagCount} tags\ntext: \"{text}\"");
+
+                if (detected.Count >= ExpectedTagCount) break;
+                if (attempt < MaxAttempts) await Task.Delay(RetryDelayMs);
+            }
 
             PopulateDetectedTags(detected);
             Recalculate();
             StatusText.Text = detected.Count == 0
                 ? $"No known tags recognized. Raw OCR text: \"{text}\""
-                : $"Detected {detected.Count} tag(s).";
+                : detected.Count < ExpectedTagCount
+                    ? $"Detected {detected.Count}/{ExpectedTagCount} tag(s) after retrying -- one may have been missed."
+                    : $"Detected {detected.Count} tag(s).";
         }
         catch (Exception ex)
         {
@@ -120,6 +159,21 @@ public partial class MainWindow : Window
 
     private static Rectangle ToRectangle(Win32Interop.RECT rect) =>
         new(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
+
+    private static string FormatRegion(Rectangle? region) =>
+        region is { } r ? $"({r.X},{r.Y},{r.Width}x{r.Height})" : "(none)";
+
+    private void AppendDiagnostic(string message)
+    {
+        _diagnosticEntries.Enqueue($"{DateTime.Now:HH:mm:ss} {message}");
+        while (_diagnosticEntries.Count > MaxDiagnosticEntries)
+        {
+            _diagnosticEntries.Dequeue();
+        }
+
+        DiagnosticsText.Text = string.Join("\n---\n", _diagnosticEntries);
+        DiagnosticsText.ScrollToEnd();
+    }
 
     private void OnRecalculateClicked(object sender, RoutedEventArgs e) => Recalculate();
 

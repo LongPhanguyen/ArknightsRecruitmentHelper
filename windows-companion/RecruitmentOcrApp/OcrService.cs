@@ -11,12 +11,12 @@ using Windows.Storage.Streams;
 
 namespace RecruitmentOcrApp;
 
-public sealed class OcrLineResult
+public sealed class OcrWordResult
 {
     public string Text { get; }
     public Rectangle BoundingRect { get; }
 
-    public OcrLineResult(string text, Rectangle boundingRect)
+    public OcrWordResult(string text, Rectangle boundingRect)
     {
         Text = text;
         BoundingRect = boundingRect;
@@ -42,14 +42,19 @@ public sealed class OcrService
         return result.Text;
     }
 
-    // Per-line text plus bounding box (in the source bitmap's pixel space),
-    // used by TagRegionDetector to locate the tag row without needing to
-    // know any in-game label text.
-    public async Task<IReadOnlyList<OcrLineResult>> RecognizeLinesAsync(Bitmap bitmap)
+    // Every recognized word, in reading order, with its own bounding box.
+    // Used by TagRegionDetector, which slides a window across this flattened
+    // sequence rather than matching per-line -- a hyphenated tag like
+    // "DP-Recovery" can get OCR'd as two separate lines ("DP", "Recovery"),
+    // and per-line matching would silently miss it since neither line alone
+    // contains the full tag name. Flattening to words keeps them adjacent
+    // regardless of which line OCR grouped them into.
+    public async Task<IReadOnlyList<OcrWordResult>> RecognizeWordsAsync(Bitmap bitmap)
     {
         var result = await RunAsync(bitmap);
         return result.Lines
-            .Select(line => new OcrLineResult(line.Text, UnionOf(line.Words)))
+            .SelectMany(line => line.Words)
+            .Select(word => new OcrWordResult(word.Text, ToRectangle(word.BoundingRect)))
             .ToList();
     }
 
@@ -59,16 +64,12 @@ public sealed class OcrService
         return await _engine.RecognizeAsync(softwareBitmap);
     }
 
-    // OcrLine has no bounding rect of its own -- only its constituent words
-    // do -- so build the line's rect as the union of its words' rects.
-    private static Rectangle UnionOf(IReadOnlyList<OcrWord> words)
-    {
-        var left = words.Min(w => w.BoundingRect.X);
-        var top = words.Min(w => w.BoundingRect.Y);
-        var right = words.Max(w => w.BoundingRect.X + w.BoundingRect.Width);
-        var bottom = words.Max(w => w.BoundingRect.Y + w.BoundingRect.Height);
-        return Rectangle.FromLTRB((int)left, (int)top, (int)Math.Ceiling(right), (int)Math.Ceiling(bottom));
-    }
+    private static Rectangle ToRectangle(Windows.Foundation.Rect rect) =>
+        Rectangle.FromLTRB(
+            (int)rect.X,
+            (int)rect.Y,
+            (int)Math.Ceiling(rect.X + rect.Width),
+            (int)Math.Ceiling(rect.Y + rect.Height));
 
     // Round-trips through an in-memory PNG so SoftwareBitmap decoding handles the
     // pixel format conversion for us instead of hand-rolling a BGRA8 buffer copy.

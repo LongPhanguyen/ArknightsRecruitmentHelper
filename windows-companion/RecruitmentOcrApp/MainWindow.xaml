@@ -1,32 +1,39 @@
 <Window x:Class="RecruitmentOcrApp.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Arknights Recruitment OCR" Height="640" Width="420"
+        Title="Arknights Recruitment OCR" Height="760" Width="440"
         Topmost="True">
-    <StackPanel Margin="12">
-        <Button x:Name="SelectWindowButton" Content="Select Emulator Window" Click="OnSelectWindowClicked" Margin="0,0,0,8"/>
-        <TextBlock x:Name="WindowStatusText" Text="No window selected yet." Margin="0,0,0,8" TextWrapping="Wrap"/>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="12">
+            <Button x:Name="SelectWindowButton" Content="Select Emulator Window" Click="OnSelectWindowClicked" Margin="0,0,0,8"/>
+            <TextBlock x:Name="WindowStatusText" Text="No window selected yet." Margin="0,0,0,8" TextWrapping="Wrap"/>
 
-        <Button x:Name="CaptureButton" Content="Capture Tags" Click="OnCaptureClicked" Margin="0,0,0,12" IsEnabled="False"/>
+            <Button x:Name="CaptureButton" Content="Capture Tags" Click="OnCaptureClicked" Margin="0,0,0,12" IsEnabled="False"/>
 
-        <TextBlock x:Name="StatusText" Margin="0,0,0,8" TextWrapping="Wrap"/>
+            <TextBlock x:Name="StatusText" Margin="0,0,0,8" TextWrapping="Wrap"/>
 
-        <TextBlock Text="Detected tags (uncheck any misreads)" FontWeight="Bold" Margin="0,0,0,4"/>
-        <StackPanel x:Name="DetectedTagsPanel" Margin="0,0,0,12"/>
+            <TextBlock Text="Detected tags (uncheck any misreads)" FontWeight="Bold" Margin="0,0,0,4"/>
+            <StackPanel x:Name="DetectedTagsPanel" Margin="0,0,0,12"/>
 
-        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-            <CheckBox x:Name="FourStarFilterCheckBox" Content="Only show 4★+ combos"
-                      Checked="OnRecalculateClicked" Unchecked="OnRecalculateClicked" Margin="0,0,16,0"/>
-            <CheckBox x:Name="RobotWarningCheckBox" Content="Warn on Robot/1★ tag"
-                      Checked="OnRecalculateClicked" Unchecked="OnRecalculateClicked"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                <CheckBox x:Name="FourStarFilterCheckBox" Content="Only show 4★+ combos"
+                          Checked="OnRecalculateClicked" Unchecked="OnRecalculateClicked" Margin="0,0,16,0"/>
+                <CheckBox x:Name="RobotWarningCheckBox" Content="Warn on Robot/1★ tag"
+                          Checked="OnRecalculateClicked" Unchecked="OnRecalculateClicked"/>
+            </StackPanel>
+
+            <TextBlock x:Name="RobotWarningText" Foreground="OrangeRed" FontWeight="Bold"
+                       TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed"/>
+
+            <Button x:Name="RecalculateButton" Content="Recalculate" Click="OnRecalculateClicked" Margin="0,0,0,12"/>
+
+            <TextBlock Text="Results" FontWeight="Bold" Margin="0,0,0,4"/>
+            <ListBox x:Name="ResultsList" Height="180" Margin="0,0,0,12"/>
+
+            <TextBlock Text="Diagnostics (raw OCR text / region bounds per attempt)" FontWeight="Bold" Margin="0,0,0,4"/>
+            <TextBox x:Name="DiagnosticsText" IsReadOnly="True" TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto" Height="160"
+                     FontFamily="Consolas" FontSize="11"/>
         </StackPanel>
-
-        <TextBlock x:Name="RobotWarningText" Foreground="OrangeRed" FontWeight="Bold"
-                   TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed"/>
-
-        <Button x:Name="RecalculateButton" Content="Recalculate" Click="OnRecalculateClicked" Margin="0,0,0,12"/>
-
-        <TextBlock Text="Results" FontWeight="Bold" Margin="0,0,0,4"/>
-        <ListBox x:Name="ResultsList" Height="220"/>
-    </StackPanel>
+    </ScrollViewer>
 </Window>

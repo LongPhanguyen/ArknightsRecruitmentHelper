@@ -9,27 +9,31 @@ region with Windows' built-in text recognition, matches the result against
 the known tag list, and surfaces which detected tags form a real
 rarity-guaranteeing combo per Arknights' actual recruitment mechanics.
 
-**Verified building and running on Windows**, including the one-click window
-picker and automatic tag-region detection (fixed a couple of real build/logic
-errors along the way — see git history). **The rarity-combo toggles
-(`TagRarityRules.cs`) are new and have not been build/run-tested yet** —
-everything else in this list has been. Treat the next build as the real first
-test pass for this part specifically.
+**Verified building and running on Windows**, including publishing a
+standalone .exe. **The word-level capture-region fix, retry logic, and
+diagnostics panel (this round's changes) have not been build/run-tested
+yet** — everything else in this list has been. Treat the next build as the
+real first test pass for this part specifically.
 
 ## Projects
 
 - `RecruitmentCore` — platform-agnostic library: `Tag`, `Operator`,
-  `RecruitmentData` (placeholder data, mirrors the Android project's data 1:1),
-  `RecruitmentCalculator` (an operator-roster-based combo evaluator — not
-  currently used by the OCR app since we don't have a real operator roster;
-  kept for when one's available), and `TagRarityRules` (the real, static
-  tag-combo → guaranteed-rarity table this app actually uses).
-- `RecruitmentCore.Tests` — xUnit tests covering both the calculator and the
-  rarity rules (including the supersede/dedup logic for overlapping combos).
+  `RecruitmentData` (placeholder fixture data, mirrors the Android project's
+  data 1:1 — used only by `RecruitmentCalculator`'s tests, not real
+  operators), `RecruitmentCalculator` (an operator-roster-based combo
+  evaluator — not currently used by the OCR app since we don't have a real
+  operator roster; kept for when one's available), `TagRarityRules` (the
+  real, static tag-combo → guaranteed-rarity table this app actually uses),
+  and `OperatorLookup`/`OperatorDatabase` (groundwork for "which operators
+  can this tag combo produce" — `OperatorDatabase.AllOperators` is
+  intentionally empty; see below).
+- `RecruitmentCore.Tests` — xUnit tests covering the calculator, the rarity
+  rules (including the supersede/dedup logic), and the operator lookup.
 - `RecruitmentOcrApp` — WPF app: window picking (`WindowPicker.cs` +
   `Win32Interop.cs`), automatic tag-region detection (`TagRegionDetector.cs`),
   screen capture (GDI `CopyFromScreen`), OCR (`Windows.Media.Ocr`), tag
-  matching, rarity-combo filtering, and the main UI.
+  matching, rarity-combo filtering, retry logic, and the main UI (including a
+  diagnostics panel).
 
 ## Prerequisites
 
@@ -117,15 +121,57 @@ That's the one file to hand to a friend. A few things worth knowing:
    normally — it isn't suppressed — so it may register as a click inside the
    game too. Clicking on a neutral part of the window (title bar, background)
    avoids that.
-4. The app OCRs the whole window, finds every recognized line that matches a
-   known tag name, and unions their bounding boxes (padded a bit) into the
-   capture region — no manual selection needed.
+4. The app OCRs the whole window, finds every contiguous run of recognized
+   words that matches a known tag name, and unions their bounding boxes
+   (padded a bit) into the capture region — no manual selection needed.
 5. If it can't find any recognizable tags, it says so clearly rather than
    guessing — just make sure the tag screen is visible and try again.
 6. From then on, "Capture Tags" re-locates the window (by handle, or by title
    match if the handle goes stale, e.g. the emulator restarted) and captures
    the stored region relative to its *current* position, so moving/resizing
    the window doesn't break capture.
+
+## Reliability: retries and diagnostics
+
+Two independent issues were found during testing and fixed:
+
+- **A hyphenated tag like `DP-Recovery` could get silently dropped from
+  region detection.** OCR sometimes recognizes it as two separate lines
+  ("DP" and "Recovery") rather than one. The detector used to check each
+  line's text against the tag vocabulary *in isolation*, so neither fragment
+  alone contained the full tag name, and its bounding box just wasn't
+  included in the region calculation — shrinking the capture area and
+  potentially clipping whichever tag sat at that edge. This is consistent
+  with the reported symptom being positional (often the middle-bottom slot)
+  rather than tied to one specific tag. Fixed by matching against the
+  flattened, ordered *word* sequence instead of per-line, so a tag split
+  across lines by OCR is still found as long as the words remain adjacent.
+- **Intermittent OCR misreads.** Both "Select Emulator Window" (region
+  detection) and "Capture Tags" (the actual tag read) now retry up to 3
+  times if fewer than 5 tags are found, with a short delay between attempts,
+  before giving up and showing whatever was found with a clear "only found
+  N/5" message rather than silently under-reporting.
+- **A diagnostics panel** at the bottom of the window logs the raw OCR
+  output and calculated region bounds for every attempt (both region
+  detection and capture), so a miss can be debugged from what was actually
+  read rather than only from what tags ended up displayed. This uses a
+  visible UI panel rather than `Debug.WriteLine`, since a published
+  standalone .exe has no attached debugger to see that output.
+
+## Operator lookup (groundwork only)
+
+`OperatorLookup.FindPossibleOperators` takes a detected tag set and returns
+every operator in a roster whose own tags are fully contained within it —
+i.e. operators that could actually appear in that recruitment. This is
+groundwork only, not wired into the UI yet.
+
+**`OperatorDatabase.AllOperators` is intentionally empty.** A real roster
+needs several hundred operators' name/rarity/tags, which changes as new
+operators release — that has to come from an external source (a wiki data
+export or existing community database/API), not be hand-written here, since
+guessing at operator-to-tag mappings would produce wrong results in a way
+that's hard to notice. Populate it once real data is available (e.g. import
+a JSON export into `OperatorDatabase.cs`).
 
 ## Rarity-combo toggles
 
@@ -167,6 +213,12 @@ tag dump:
   visible (no other overlapping UI) when clicking "Select Emulator Window"
   avoids this. If the detected region still looks wrong, that's the first
   thing to check.
+- The word-level matching fix, retry loops, and diagnostics panel are all
+  new this round and haven't been build/run-tested. If retries don't seem to
+  help with the missing-tag issue, check the diagnostics panel's raw OCR
+  text per attempt first -- it'll show whether the tag was read at all
+  (region/matching problem) or read but with wrong characters (OCR quality
+  problem), which point to different fixes.
 - `RecruitmentData.cs` is the same placeholder data as the Android app. Update
   both when the real tag list and operator data are available; consider
   a shared JSON file consumed by both apps as a later step rather than hand-
