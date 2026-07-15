@@ -10,10 +10,11 @@ the known tag list, and surfaces which detected tags form a real
 rarity-guaranteeing combo per Arknights' actual recruitment mechanics.
 
 **Verified building and running on Windows**, including publishing a
-standalone .exe. **The word-level capture-region fix, retry logic, and
-diagnostics panel (this round's changes) have not been build/run-tested
-yet** — everything else in this list has been. Treat the next build as the
-real first test pass for this part specifically.
+standalone .exe. **The word-level capture-region fix, retry logic,
+diagnostics panel, and the new embedded operator database (this round's and
+the previous round's changes) have not been build/run-tested yet** —
+everything else in this list has been. Treat the next build as the real
+first test pass for this part specifically.
 
 ## Projects
 
@@ -21,12 +22,13 @@ real first test pass for this part specifically.
   `RecruitmentData` (placeholder fixture data, mirrors the Android project's
   data 1:1 — used only by `RecruitmentCalculator`'s tests, not real
   operators), `RecruitmentCalculator` (an operator-roster-based combo
-  evaluator — not currently used by the OCR app since we don't have a real
-  operator roster; kept for when one's available), `TagRarityRules` (the
-  real, static tag-combo → guaranteed-rarity table this app actually uses),
-  and `OperatorLookup`/`OperatorDatabase` (groundwork for "which operators
-  can this tag combo produce" — `OperatorDatabase.AllOperators` is
-  intentionally empty; see below).
+  evaluator — not currently wired into the OCR app's UI, though it could
+  now be pointed at `OperatorDatabase` instead of the fixture data as a
+  future step), `TagRarityRules` (the real, static tag-combo →
+  guaranteed-rarity table the app's UI actually uses today), and
+  `OperatorLookup`/`OperatorDatabase` (real operator roster + "which
+  operators can this tag combo produce" lookup — groundwork, not wired into
+  the UI yet; see below for exactly where the data came from).
 - `RecruitmentCore.Tests` — xUnit tests covering the calculator, the rarity
   rules (including the supersede/dedup logic), and the operator lookup.
 - `RecruitmentOcrApp` — WPF app: window picking (`WindowPicker.cs` +
@@ -158,20 +160,62 @@ Two independent issues were found during testing and fixed:
   visible UI panel rather than `Debug.WriteLine`, since a published
   standalone .exe has no attached debugger to see that output.
 
-## Operator lookup (groundwork only)
+## Operator lookup
 
 `OperatorLookup.FindPossibleOperators` takes a detected tag set and returns
-every operator in a roster whose own tags are fully contained within it —
-i.e. operators that could actually appear in that recruitment. This is
-groundwork only, not wired into the UI yet.
+every operator in `OperatorDatabase.AllOperators` whose own tags are fully
+contained within it — i.e. operators that could actually appear in that
+recruitment. Groundwork only so far — not wired into the UI yet.
 
-**`OperatorDatabase.AllOperators` is intentionally empty.** A real roster
-needs several hundred operators' name/rarity/tags, which changes as new
-operators release — that has to come from an external source (a wiki data
-export or existing community database/API), not be hand-written here, since
-guessing at operator-to-tag mappings would produce wrong results in a way
-that's hard to notice. Populate it once real data is available (e.g. import
-a JSON export into `OperatorDatabase.cs`).
+**`OperatorDatabase.AllOperators` is now real data** (149 operators,
+currently recruitable on Global), loaded from an embedded JSON resource
+(`RecruitmentCore/Data/operators.json`) baked in at build time — no network
+access needed at runtime, and it survives single-file publish since embedded
+resources live inside the compiled assembly.
+
+### Where this data came from, and what had to change from the original plan
+
+The originally-documented path (`akhr.json` at the repo root) 404s because
+the repo was restructured; it moved into a `json/` folder. But investigating
+further turned up more than just a path change:
+
+- **`json/akhr.json` and `json/akhr2.json` (the two files matching the
+  originally-assumed name) are both stale since a single 2019 file-move
+  commit** — neither has been touched since, meaning ~6 years of missing
+  operator releases. The repo itself is still actively maintained (pushed as
+  recently as November 2025), just not those two specific files.
+- **The actually-current file is `json/tl-akhr.json`**, with commits as
+  recent as 2025-11-01 ("CN Recruiting 2025-11-01"). Correct raw URL:
+  `https://raw.githubusercontent.com/Aceship/AN-EN-Tags/master/json/tl-akhr.json`.
+  416 total entries (including non-recruitable/CN-only ones).
+- **The schema doesn't match what was assumed.** `type` and `tags` in
+  `tl-akhr.json` are in *Chinese*, not English — this is a translation-table
+  repo, and the CN→EN mapping lives in two companion files:
+  `json/tl-type.json` (class name CN→EN) and `json/tl-tags.json` (tag
+  name CN→EN, plus a `type` field: `qualifications`/`position`/`affix`).
+  All 8 classes and all 23 position/qualification/affix tags in those two
+  files map cleanly onto this project's existing tag list with zero
+  unmapped entries.
+- **The operator's Class tag is a separate `type` field, not part of the
+  `tags` array.** An operator's full tag set = `{translated type}` ∪
+  `{translated tags}` — e.g. Lancet-2's `tags` array is `["Ranged",
+  "Healing"]` but her full recruitment tag set also needs "Medic" added in
+  from `type`.
+- **Two hidden-status fields exist: `hidden` and `globalHidden`.** 4 of the
+  416 operators are recruitable on CN (`hidden: false`) but not yet on
+  Global (`globalHidden: true`) — e.g. Kal'tsit. Filtered on `globalHidden`
+  (falling back to `hidden` when absent, since only 345/416 entries have
+  `globalHidden` at all) to match this project's Global/EN client target.
+- **Sanity-checked the join**: every 6★ operator has exactly the Top
+  Operator tag and no others do (30/30 match), and every Senior-Operator-
+  tagged operator is 5★ (51/51) — strong evidence the CN→EN translation
+  join is correct rather than silently misaligned.
+
+This is a **point-in-time snapshot** (generated 2026-07-15 from the commit
+state described above), not a live feed — it'll drift as new operators
+release. Regenerating means re-running the same fetch → CN/EN join → filter
+process against the then-current `tl-akhr.json`/`tl-type.json`/
+`tl-tags.json` and overwriting `Data/operators.json`.
 
 ## Rarity-combo toggles
 

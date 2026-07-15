@@ -28,9 +28,9 @@ public class OperatorLookupTests
     }
 
     [Fact]
-    public void EmptyDatabaseReturnsNoResults()
+    public void NoTagsDetectedReturnsNoOperators()
     {
-        var results = OperatorLookup.FindPossibleOperators(OperatorDatabase.AllOperators, new HashSet<int> { 1, 2, 3 });
+        var results = OperatorLookup.FindPossibleOperators(OperatorDatabase.AllOperators, new HashSet<int>());
 
         Assert.Empty(results);
     }
