@@ -131,10 +131,21 @@ That's the one file to hand to a friend. A few things worth knowing:
    (padded a bit) into the capture region — no manual selection needed.
 5. If it can't find any recognizable tags, it says so clearly rather than
    guessing — just make sure the tag screen is visible and try again.
-6. From then on, "Capture Tags" re-locates the window (by handle, or by title
-   match if the handle goes stale, e.g. the emulator restarted) and captures
-   the stored region relative to its *current* position, so moving/resizing
-   the window doesn't break capture.
+6. **Tags are captured automatically right after the window is selected** —
+   no separate "Capture Tags" click needed for the normal flow. The button
+   is still there for manually re-capturing later (e.g. after switching to
+   a new recruitment) without re-selecting the window.
+7. "Capture Tags" (whether automatic or manual) re-locates the window (by
+   handle, or by title match if the handle goes stale, e.g. the emulator
+   restarted) and captures the stored region relative to its *current*
+   position, so moving/resizing the window doesn't break capture.
+
+Known remaining inconsistency: region detection occasionally still
+computes the *whole window* as the capture region instead of just the tag
+cluster, even after the fixes described below. Root cause isn't nailed down
+yet — if you want to help pin it down, the diagnostics panel's word dump
+and the saved debug images (`%TEMP%\ArknightsOcrDebug\`) for a run where
+this happens would help, the same way they did for the earlier bugs.
 
 ## If fewer than 5 tags are detected: check the window size first
 

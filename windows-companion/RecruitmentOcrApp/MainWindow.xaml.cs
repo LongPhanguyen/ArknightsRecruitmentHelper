@@ -88,11 +88,15 @@ public partial class MainWindow : Window
 
             WindowStatusText.Text = detectionResult.MatchedTagCount >= ExpectedTagCount
                 ? $"Window selected: \"{picked.Title}\". Tag region auto-detected " +
-                  $"({_tagRegionOffset.Width}x{_tagRegionOffset.Height})."
+                  $"({_tagRegionOffset.Width}x{_tagRegionOffset.Height}). Capturing tags..."
                 : $"Window selected: \"{picked.Title}\", but only found {detectionResult.MatchedTagCount}/{ExpectedTagCount} " +
                   "tags after retrying. Most likely cause: the emulator window is too small/short to show the " +
                   "whole recruitment popup -- try resizing or maximizing it so all 5 tags AND the Cost/Confirm " +
-                  "buttons beneath them are visible, then select the window again.";
+                  "buttons beneath them are visible, then select the window again. Capturing with what was found...";
+
+            // Auto-capture right away so selecting the window is the only
+            // manual step -- no separate "Capture Tags" click needed.
+            await CaptureTagsAsync();
         }
         catch (OperationCanceledException)
         {
@@ -108,7 +112,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void OnCaptureClicked(object sender, RoutedEventArgs e)
+    private async void OnCaptureClicked(object sender, RoutedEventArgs e) => await CaptureTagsAsync();
+
+    private async Task CaptureTagsAsync()
     {
         CaptureButton.IsEnabled = false;
         StatusText.Text = "Capturing...";
