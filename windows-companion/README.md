@@ -154,11 +154,17 @@ Two independent issues were found during testing and fixed:
   before giving up and showing whatever was found with a clear "only found
   N/5" message rather than silently under-reporting.
 - **A diagnostics panel** at the bottom of the window logs the raw OCR
-  output and calculated region bounds for every attempt (both region
-  detection and capture), so a miss can be debugged from what was actually
-  read rather than only from what tags ended up displayed. This uses a
-  visible UI panel rather than `Debug.WriteLine`, since a published
-  standalone .exe has no attached debugger to see that output.
+  output, calculated region bounds, and window/monitor info (hwnd, class
+  name, title, window rect, client rect, monitor bounds) for every attempt
+  (both region detection and capture), so a miss can be debugged from what
+  was actually read rather than only from what tags ended up displayed.
+  This uses a visible UI panel rather than `Debug.WriteLine`, since a
+  published standalone .exe has no attached debugger to see that output.
+- **Every captured image is also saved to disk** as a PNG, at
+  `%TEMP%\ArknightsOcrDebug\` (path logged alongside each diagnostic entry).
+  Text logs can tell you *that* something was missed, but not whether the
+  region is genuinely too small or the captured image itself doesn't extend
+  far enough — looking at the actual saved image answers that immediately.
 
 ## Operator lookup
 

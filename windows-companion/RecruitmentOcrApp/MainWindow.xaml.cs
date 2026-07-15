@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -58,12 +60,14 @@ public partial class MainWindow : Window
             for (var attempt = 1; attempt <= MaxAttempts; attempt++)
             {
                 using var attemptBitmap = ScreenCapture.CaptureRegion(clientRect);
+                var savedPath = SaveDebugImage(attemptBitmap, $"select-attempt{attempt}");
                 var words = await _ocrService.RecognizeWordsAsync(attemptBitmap);
                 detectionResult = TagRegionDetector.DetectTagRegion(words);
 
                 AppendDiagnostic(
                     $"[Select attempt {attempt}/{MaxAttempts}] matched {detectionResult.MatchedTagCount}/{ExpectedTagCount} tags, " +
-                    $"region={FormatRegion(detectionResult.Region)}\nwords: {string.Join(" | ", words.Select(w => w.Text))}");
+                    $"region={FormatRegion(detectionResult.Region)}, saved={savedPath}\n" +
+                    $"words: {string.Join(" | ", words.Select(w => w.Text))}");
 
                 if (detectionResult.MatchedTagCount >= ExpectedTagCount) break;
                 if (attempt < MaxAttempts) await Task.Delay(RetryDelayMs);
@@ -130,12 +134,13 @@ public partial class MainWindow : Window
             for (var attempt = 1; attempt <= MaxAttempts; attempt++)
             {
                 using var bitmap = ScreenCapture.CaptureRegion(region);
+                var savedPath = SaveDebugImage(bitmap, $"capture-attempt{attempt}");
                 text = await _ocrService.RecognizeAsync(bitmap);
                 detected = TagMatcher.Match(text);
 
                 AppendDiagnostic(
                     $"[Capture attempt {attempt}/{MaxAttempts}] region={FormatRegion(region)}, " +
-                    $"matched {detected.Count}/{ExpectedTagCount} tags\ntext: \"{text}\"");
+                    $"matched {detected.Count}/{ExpectedTagCount} tags, saved={savedPath}\ntext: \"{text}\"");
 
                 if (detected.Count >= ExpectedTagCount) break;
                 if (attempt < MaxAttempts) await Task.Delay(RetryDelayMs);
@@ -167,6 +172,21 @@ public partial class MainWindow : Window
 
     private static string FormatRect(Win32Interop.RECT r) =>
         $"({r.Left},{r.Top},{r.Right - r.Left}x{r.Bottom - r.Top})";
+
+    private static readonly string DebugImageDirectory = Path.Combine(Path.GetTempPath(), "ArknightsOcrDebug");
+
+    // Saves exactly what got fed to OCR so it can be looked at directly --
+    // text logs alone can't distinguish "the region is too small" from "the
+    // captured image itself doesn't extend far enough," but a screenshot
+    // answers that immediately.
+    private static string SaveDebugImage(Bitmap bitmap, string label)
+    {
+        Directory.CreateDirectory(DebugImageDirectory);
+        var fileName = $"{label}-{DateTime.Now:yyyyMMdd-HHmmss-fff}.png";
+        var path = Path.Combine(DebugImageDirectory, fileName);
+        bitmap.Save(path, ImageFormat.Png);
+        return path;
+    }
 
     // Everything needed to sanity-check the region math: is this literally
     // the same OS window both times (hwnd), what are its real screen bounds,
