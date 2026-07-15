@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private readonly OcrService _ocrService = new();
     private readonly Dictionary<int, CheckBox> _tagCheckboxes = new();
     private readonly Queue<string> _diagnosticEntries = new();
+    private readonly RecruitmentStatsStore _statsStore = new();
 
     private IntPtr _pickedWindowHandle = IntPtr.Zero;
     private string _pickedWindowTitle = string.Empty;
@@ -37,6 +38,8 @@ public partial class MainWindow : Window
         // touches is guaranteed to already be connected.
         FourStarFilterCheckBox.IsChecked = true;
         RobotWarningCheckBox.IsChecked = true;
+
+        UpdateStatsDisplay();
     }
 
     private async void OnSelectWindowClicked(object sender, RoutedEventArgs e)
@@ -154,6 +157,22 @@ public partial class MainWindow : Window
                 if (attempt < MaxAttempts) await Task.Delay(RetryDelayMs);
             }
 
+            // Recorded here (once per capture, using the raw OCR result) rather
+            // than inside Recalculate() -- that runs on every checkbox toggle
+            // too, which would multi-count a single recruitment. Isolated in
+            // its own try/catch so a stats-file problem can't masquerade as a
+            // capture failure in StatusText.
+            try
+            {
+                var recorded = _statsStore.RecordIfNew(detected.Select(t => t.Id).ToList());
+                if (recorded) AppendDiagnostic($"[Stats] recorded new recruitment: {string.Join(",", detected.Select(t => t.Name))}");
+                UpdateStatsDisplay();
+            }
+            catch (Exception statsEx)
+            {
+                AppendDiagnostic($"[Stats] failed to record: {statsEx.Message}");
+            }
+
             PopulateDetectedTags(detected);
             Recalculate();
             StatusText.Text = detected.Count == 0
@@ -225,6 +244,20 @@ public partial class MainWindow : Window
 
         DiagnosticsText.Text = string.Join("\n---\n", _diagnosticEntries);
         DiagnosticsText.ScrollToEnd();
+    }
+
+    private void UpdateStatsDisplay()
+    {
+        var summary = _statsStore.GetSummary();
+        if (summary.Total == 0)
+        {
+            StatsText.Text = "Lifetime recruitments: none recorded yet.";
+            return;
+        }
+
+        string Pct(int count) => $"{count} ({100.0 * count / summary.Total:0.#}%)";
+        StatsText.Text = $"Lifetime recruitments: {summary.Total} — Baseline: {Pct(summary.Baseline)} | " +
+                          $"4★: {Pct(summary.FourStar)} | 5★: {Pct(summary.FiveStar)} | 6★: {Pct(summary.SixStar)}";
     }
 
     private void OnRecalculateClicked(object sender, RoutedEventArgs e) => Recalculate();

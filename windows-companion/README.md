@@ -13,11 +13,9 @@ rarity-guaranteeing combo per Arknights' actual recruitment mechanics.
 standalone .exe, and the window-picking/capture-region pipeline has been
 through several rounds of real testing and fixes (see "Reliability" below).
 **Not yet tested by the user specifically: the rarity-combo toggles, the
-Robot warning, and the new "Possible Operators" list.** The most recent
-region-detection fix (centroid-based outlier removal, replacing the
-pairwise-clustering approach that had a small-window failure mode) is also
-unverified. Treat the next build as the real first test pass for those
-parts specifically.
+Robot warning, the "Possible Operators" list, auto-capture-after-select, and
+the new lifetime recruitment stats log.** Treat the next build as the real
+first test pass for those parts specifically.
 
 ## Projects
 
@@ -215,6 +213,32 @@ Three independent issues were found during testing and fixed:
   Text logs can tell you *that* something was missed, but not whether the
   region is genuinely too small or the captured image itself doesn't extend
   far enough — looking at the actual saved image answers that immediately.
+
+## Lifetime recruitment stats
+
+`RecruitmentStatsStore` keeps a running log of distinct recruitments and
+their best guaranteed rarity (baseline/4★/5★/6★), persisted to
+`%APPDATA%\ArknightsRecruitmentOcr\recruitment-log.json` so it survives app
+restarts. The "Lifetime recruitments" line near the top of the window shows
+the running ratio, e.g. `Lifetime recruitments: 48 — Baseline: 12 (25%) |
+4★: 30 (62.5%) | 5★: 5 (10.4%) | 6★: 1 (2.1%)`.
+
+**Deduplicated by tag set**, not by button click: a new entry is only
+recorded when the freshly-captured tag set differs from the *most recently
+recorded* one. Pressing "Select Emulator Window" or "Capture Tags" again
+on a recruitment you haven't moved past yet re-detects the same 5 tags and
+correctly doesn't inflate the count. Recording happens once per capture
+(right after OCR, using the raw detected tags) rather than inside
+`Recalculate()`, since that also runs on every checkbox toggle and would
+otherwise multi-count a single recruitment. A stats-file problem (e.g.
+permissions) is caught separately from the main capture flow and logged to
+the diagnostics panel rather than showing as a capture failure.
+
+Known limitation: this dedupes on exact tag-set equality, so if two
+genuinely different recruitments happen to draw the identical 5 tags back
+to back, the second one won't be counted. Accepted as the simplest
+reasonable heuristic rather than something more elaborate (e.g. a
+time-based cutoff).
 
 ## Operator lookup
 
