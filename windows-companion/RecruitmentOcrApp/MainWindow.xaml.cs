@@ -27,7 +27,6 @@ public partial class MainWindow : Window
 
     private IntPtr _pickedWindowHandle = IntPtr.Zero;
     private string _pickedWindowTitle = string.Empty;
-    private Rectangle _tagRegionOffset; // relative to the picked window's client top-left
 
     public MainWindow()
     {
@@ -54,29 +53,14 @@ public partial class MainWindow : Window
 
             WindowStatusText.Text = $"Window picked: \"{picked.Title}\". Detecting tag region...";
             AppendDiagnostic($"[Select] picked window: {DescribeWindow(picked.Handle)}");
-            var clientRect = ToRectangle(Win32Interop.GetClientScreenRect(picked.Handle));
 
-            // The loop always runs at least once (MaxAttempts >= 1), so these
-            // start with a definite "nothing found yet" result rather than
-            // null, keeping the post-loop checks unambiguous.
-            var detectionResult = new TagRegionDetectionResult(null, 0);
-            for (var attempt = 1; attempt <= MaxAttempts; attempt++)
-            {
-                using var attemptBitmap = ScreenCapture.CaptureRegion(clientRect);
-                var savedPath = SaveDebugImage(attemptBitmap, $"select-attempt{attempt}");
-                var words = await _ocrService.RecognizeWordsAsync(attemptBitmap);
-                detectionResult = TagRegionDetector.DetectTagRegion(words);
+            // Only used here to validate the window has tags on it at all
+            // (and to give early feedback) -- CaptureTagsAsync re-detects
+            // fresh from the window's CURRENT size rather than trusting
+            // this result, since the window can be resized in between.
+            var detectionResult = await DetectRegionAsync(picked.Handle, "select");
 
-                AppendDiagnostic(
-                    $"[Select attempt {attempt}/{MaxAttempts}] matched {detectionResult.MatchedTagCount}/{ExpectedTagCount} tags, " +
-                    $"region={FormatRegion(detectionResult.Region)}, saved={savedPath}\n" +
-                    $"words: {string.Join(" | ", words.Select(w => w.Text))}");
-
-                if (detectionResult.MatchedTagCount >= ExpectedTagCount) break;
-                if (attempt < MaxAttempts) await Task.Delay(RetryDelayMs);
-            }
-
-            if (detectionResult.Region is not { } region)
+            if (detectionResult.Region is null)
             {
                 WindowStatusText.Text =
                     "Could not automatically find the tag area -- no recognizable tags were read from " +
@@ -86,12 +70,10 @@ public partial class MainWindow : Window
 
             _pickedWindowHandle = picked.Handle;
             _pickedWindowTitle = picked.Title;
-            _tagRegionOffset = region;
             CaptureButton.IsEnabled = true;
 
             WindowStatusText.Text = detectionResult.MatchedTagCount >= ExpectedTagCount
-                ? $"Window selected: \"{picked.Title}\". Tag region auto-detected " +
-                  $"({_tagRegionOffset.Width}x{_tagRegionOffset.Height}). Capturing tags..."
+                ? $"Window selected: \"{picked.Title}\". Tag region auto-detected. Capturing tags..."
                 : $"Window selected: \"{picked.Title}\", but only found {detectionResult.MatchedTagCount}/{ExpectedTagCount} " +
                   "tags after retrying. Most likely cause: the emulator window is too small/short to show the " +
                   "whole recruitment popup -- try resizing or maximizing it so all 5 tags AND the Cost/Confirm " +
@@ -132,12 +114,24 @@ public partial class MainWindow : Window
             _pickedWindowHandle = hwnd;
             AppendDiagnostic($"[Capture] resolved window: {DescribeWindow(hwnd)}");
 
+            // Re-detect the region fresh every time rather than reusing a
+            // region computed at Select time -- the window can be resized
+            // in between, and a cached region sized for a different window
+            // size is exactly what caused tags to go missing at smaller
+            // sizes.
+            var detectionResult = await DetectRegionAsync(hwnd, "capture-detect");
+            if (detectionResult.Region is not { } relativeRegion)
+            {
+                StatusText.Text = "Could not find the tag area on this capture -- try again, or re-select the window.";
+                return;
+            }
+
             var clientRect = Win32Interop.GetClientScreenRect(hwnd);
             var region = new Rectangle(
-                clientRect.Left + _tagRegionOffset.X,
-                clientRect.Top + _tagRegionOffset.Y,
-                _tagRegionOffset.Width,
-                _tagRegionOffset.Height);
+                clientRect.Left + relativeRegion.X,
+                clientRect.Top + relativeRegion.Y,
+                relativeRegion.Width,
+                relativeRegion.Height);
 
             IReadOnlyList<Tag> detected = Array.Empty<Tag>();
             var text = string.Empty;
@@ -190,6 +184,39 @@ public partial class MainWindow : Window
         {
             CaptureButton.IsEnabled = true;
         }
+    }
+
+    // Shared by both "Select Emulator Window" and every "Capture Tags" run:
+    // captures the window's current whole client area, OCRs it, and finds
+    // the tag region relative to that capture's own top-left. Called fresh
+    // each time (not cached) so a window resized between selecting it and
+    // any later capture always gets a region sized for its CURRENT state.
+    private async Task<TagRegionDetectionResult> DetectRegionAsync(IntPtr hwnd, string logLabel)
+    {
+        var clientRect = ToRectangle(Win32Interop.GetClientScreenRect(hwnd));
+
+        // The loop always runs at least once (MaxAttempts >= 1), so this
+        // starts with a definite "nothing found yet" result rather than
+        // null, keeping the caller's post-loop check unambiguous.
+        var detectionResult = new TagRegionDetectionResult(null, 0);
+
+        for (var attempt = 1; attempt <= MaxAttempts; attempt++)
+        {
+            using var attemptBitmap = ScreenCapture.CaptureRegion(clientRect);
+            var savedPath = SaveDebugImage(attemptBitmap, $"{logLabel}-attempt{attempt}");
+            var words = await _ocrService.RecognizeWordsAsync(attemptBitmap);
+            detectionResult = TagRegionDetector.DetectTagRegion(words, attemptBitmap.Size);
+
+            AppendDiagnostic(
+                $"[{logLabel} attempt {attempt}/{MaxAttempts}] matched {detectionResult.MatchedTagCount}/{ExpectedTagCount} tags, " +
+                $"windowSize={clientRect.Width}x{clientRect.Height}, region={FormatRegion(detectionResult.Region)}, saved={savedPath}\n" +
+                $"words: {string.Join(" | ", words.Select(w => w.Text))}");
+
+            if (detectionResult.MatchedTagCount >= ExpectedTagCount) break;
+            if (attempt < MaxAttempts) await Task.Delay(RetryDelayMs);
+        }
+
+        return detectionResult;
     }
 
     private static Rectangle ToRectangle(Win32Interop.RECT rect) =>

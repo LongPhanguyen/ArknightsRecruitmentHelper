@@ -24,3 +24,8 @@ local.properties
 
 # Local tool config
 .claude/
+
+# Ad hoc debug screenshots dropped in for review during development --
+# ephemeral test artifacts, not reference material (see
+# windows-companion/docs/reference/ for the images that ARE kept).
+windows-companion/local-debug/

@@ -46,7 +46,16 @@ public static class TagRegionDetector
     // under the known cap.
     private const int MaxRealTags = 5;
 
-    public static TagRegionDetectionResult DetectTagRegion(IReadOnlyList<OcrWordResult> words)
+    // How far to extend the region's bottom edge past the tightly matched
+    // area, as a fraction of the whole screenshot's height -- not the
+    // matched text's own size. Everything about the recruitment UI (chip
+    // size, spacing, row gaps) scales with the window, so the room needed
+    // to reach a second row this pass didn't read as text needs to scale
+    // the same way, rather than being tied to the (possibly much smaller)
+    // size of the text that WAS matched.
+    private const double BottomExtensionFraction = 0.22;
+
+    public static TagRegionDetectionResult DetectTagRegion(IReadOnlyList<OcrWordResult> words, Size sourceImageSize)
     {
         var wordTokens = words
             .Select(w => TagMatcher.Tokenize(w.Text).FirstOrDefault() ?? string.Empty)
@@ -88,20 +97,26 @@ public static class TagRegionDetector
         // The bottom edge gets extra room deliberately: the recruitment tag
         // grid can have a second row that this OCR pass didn't recognize as
         // text at all (observed at smaller window sizes), and that row
-        // always sits just below whatever WAS detected. Extending downward
-        // by the matched cluster's own height gives a missed second row
-        // somewhere to be captured. This doesn't risk false positives --
-        // the separate tag-reading OCR pass that runs against the final
-        // cropped region only pulls out real tag names from whatever text
-        // is actually present, so extra empty/unrelated space below is
-        // harmless, not misleading.
-        var bottomPadding = sidePadding + union.Height;
+        // always sits just below whatever WAS detected. This doesn't risk
+        // false positives -- the separate tag-reading OCR pass that runs
+        // against the final cropped region only pulls out real tag names
+        // from whatever text is actually present, so extra empty/unrelated
+        // space below is harmless, not misleading.
+        var bottomPadding = Math.Max(sidePadding, (int)(sourceImageSize.Height * BottomExtensionFraction));
 
         var expanded = new Rectangle(
             union.X - sidePadding,
             union.Y - sidePadding,
             union.Width + sidePadding * 2,
             union.Height + sidePadding + bottomPadding);
+
+        // Clamp to the actual screenshot bounds -- a match near the bottom
+        // edge plus a generous downward extension can otherwise push the
+        // rectangle outside the source image, and the later capture step
+        // would end up reading whatever's on-screen past the window's own
+        // edge instead of clipping to it.
+        var sourceBounds = new Rectangle(Point.Empty, sourceImageSize);
+        expanded.Intersect(sourceBounds);
 
         return new TagRegionDetectionResult(expanded, inliers.Count);
     }

@@ -13,9 +13,11 @@ rarity-guaranteeing combo per Arknights' actual recruitment mechanics.
 standalone .exe, and the window-picking/capture-region pipeline has been
 through several rounds of real testing and fixes (see "Reliability" below).
 **Not yet tested by the user specifically: the rarity-combo toggles, the
-Robot warning, the "Possible Operators" list, auto-capture-after-select, and
-the new lifetime recruitment stats log.** Treat the next build as the real
-first test pass for those parts specifically.
+Robot warning, the "Possible Operators" list, auto-capture-after-select, the
+lifetime recruitment stats log, the proportional (screenshot-height-based)
+region extension, and re-detecting the region fresh on every capture.**
+Treat the next build as the real first test pass for those parts
+specifically.
 
 ## Projects
 
@@ -37,6 +39,22 @@ first test pass for those parts specifically.
   screen capture (GDI `CopyFromScreen`), OCR (`Windows.Media.Ocr`), tag
   matching, rarity-combo filtering, retry logic, and the main UI (including a
   diagnostics panel).
+
+## Repo layout
+
+- `docs/reference/` — reference images the code/data were built from:
+  `recruitment-screen.webp` (a real screenshot confirming the in-game tag
+  layout), `tag-categories.webp` and `tag-combos-1.webp`/`tag-combos-2.webp`
+  (the tag-combo tables `TagRarityRules` was transcribed from). Kept and
+  tracked in git since this is source material the code depends on, not
+  disposable debugging output.
+- `docs/planning/` — the instruction/bug-report markdown files from
+  development history. Kept as a record of what was asked and why, not
+  meant to be authoritative documentation (that's this README).
+- `local-debug/` — **gitignored.** Ad hoc screenshots dropped in for
+  reviewing a specific bug during development; not reference material and
+  not meant to be committed. Safe to delete anytime; nothing depends on
+  its contents persisting.
 
 ## Prerequisites
 
@@ -135,15 +153,17 @@ That's the one file to hand to a friend. A few things worth knowing:
    a new recruitment) without re-selecting the window.
 7. "Capture Tags" (whether automatic or manual) re-locates the window (by
    handle, or by title match if the handle goes stale, e.g. the emulator
-   restarted) and captures the stored region relative to its *current*
-   position, so moving/resizing the window doesn't break capture.
+   restarted) and **re-detects the tag region from scratch** every time,
+   rather than reusing a region computed at some earlier point — so
+   resizing the window between captures doesn't leave a stale,
+   wrong-sized region in play.
 
 Known remaining inconsistency: region detection occasionally still
 computes the *whole window* as the capture region instead of just the tag
-cluster, even after the fixes described below. Root cause isn't nailed down
-yet — if you want to help pin it down, the diagnostics panel's word dump
-and the saved debug images (`%TEMP%\ArknightsOcrDebug\`) for a run where
-this happens would help, the same way they did for the earlier bugs.
+cluster. Root cause isn't nailed down yet — if you want to help pin it
+down, the diagnostics panel's word dump and the saved debug images
+(`%TEMP%\ArknightsOcrDebug\`) for a run where this happens would help, the
+same way they did for the earlier bugs.
 
 ## If fewer than 5 tags are detected: check the window size first
 
@@ -188,17 +208,33 @@ Three independent issues were found during testing and fixed:
     doesn't recognize a whole second row of tags as text *at all* during
     region detection (not an outlier/clustering problem -- those 2 tags
     just never became candidate matches in the first place, confirmed via
-    a debug screenshot showing only 3 of 5 chips in the captured pixels).
+    debug screenshots showing only 3 of 5 chips in the captured pixels).
     Log evidence: region height shrank much faster than width as the
     window got smaller (roughly halved vs. barely changed), consistent
-    with only one row of a 2-row grid being captured. Fixed by making the
-    detected region's *bottom* edge deliberately generous -- extended
-    downward by the matched cluster's own height, specifically to leave
-    room for a second row that this pass didn't manage to read as text.
-    This doesn't risk false positives: the separate tag-reading OCR pass
+    with only one row of a 2-row grid being captured. First fix attempt:
+    extend the region's bottom edge by the matched cluster's *own* height.
+    This helped but still fell short at smaller sizes -- the matched
+    text's bounding box is a poor proxy for how much room a second row
+    actually needs, since it doesn't scale the same way the rest of the
+    UI (chip size, spacing, row gaps) does as the window shrinks. Fixed by
+    making the bottom extension a **fraction of the whole screenshot's
+    height** (22%) instead -- since everything in the UI scales with the
+    window, sizing the extension off the window's own dimensions (rather
+    than the matched text's, which can be much smaller) scales correctly
+    at any window size. The expanded rectangle is clamped to the
+    screenshot's actual bounds afterward, since a match near the edge plus
+    a generous extension can otherwise push it past the image entirely.
+    None of this risks false positives: the separate tag-reading OCR pass
     that runs against the final cropped region only pulls out real tag
     names from whatever's actually present, so extra empty space below is
     harmless.
+  - Also: the region is now **re-detected fresh on every single capture**
+    (both the initial one right after "Select Emulator Window" and any
+    later manual "Capture Tags" click) rather than computing it once and
+    reusing a cached value. A region cached from a larger window is sized
+    wrong once the window is resized smaller -- recomputing it from the
+    window's current state every time means a resize between captures
+    can't leave a stale, wrongly-sized region in play.
 - **A hyphenated tag like `DP-Recovery` could get silently dropped from
   region detection.** OCR sometimes recognizes it as two separate lines
   ("DP" and "Recovery") rather than one. The detector used to check each
