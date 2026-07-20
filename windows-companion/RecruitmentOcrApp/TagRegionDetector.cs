@@ -46,14 +46,24 @@ public static class TagRegionDetector
     // under the known cap.
     private const int MaxRealTags = 5;
 
-    // How far to extend the region's bottom edge past the tightly matched
-    // area, as a fraction of the whole screenshot's height -- not the
-    // matched text's own size. Everything about the recruitment UI (chip
-    // size, spacing, row gaps) scales with the window, so the room needed
-    // to reach a second row this pass didn't read as text needs to scale
+    // How far to extend the region's top/bottom edges past the tightly
+    // matched area, as a fraction of the whole screenshot's height -- not
+    // the matched text's own size. Everything about the recruitment UI
+    // (chip size, spacing, row gaps) scales with the window, so the room
+    // needed to reach a row this pass didn't read as text needs to scale
     // the same way, rather than being tied to the (possibly much smaller)
     // size of the text that WAS matched.
-    private const double BottomExtensionFraction = 0.22;
+    //
+    // These were tuned against an actual measured miss: a 774x173 capture
+    // where only the very top few pixels of a second row's chips were
+    // visible (no text at all, just the rounded-corner edge) -- confirming
+    // the previous 22% bottom figure was itself a guess that undershot by
+    // roughly half. Bottom gets much more room than top since the observed
+    // failure is consistently a missed row *below* the matched one, but
+    // some top margin is added too in case a match ends up anchored to the
+    // second row instead of the first.
+    private const double TopExtensionFraction = 0.18;
+    private const double BottomExtensionFraction = 0.5;
 
     public static TagRegionDetectionResult DetectTagRegion(IReadOnlyList<OcrWordResult> words, Size sourceImageSize)
     {
@@ -94,21 +104,22 @@ public static class TagRegionDetector
         var averageSize = inliers.Average(r => Math.Max(r.Width, r.Height));
         var sidePadding = Math.Max(16, (int)(averageSize * 0.6));
 
-        // The bottom edge gets extra room deliberately: the recruitment tag
-        // grid can have a second row that this OCR pass didn't recognize as
-        // text at all (observed at smaller window sizes), and that row
-        // always sits just below whatever WAS detected. This doesn't risk
-        // false positives -- the separate tag-reading OCR pass that runs
-        // against the final cropped region only pulls out real tag names
-        // from whatever text is actually present, so extra empty/unrelated
-        // space below is harmless, not misleading.
+        // Top/bottom edges get extra room deliberately: the recruitment tag
+        // grid can have a row that this OCR pass didn't recognize as text
+        // at all (observed at smaller window sizes), most often just below
+        // whatever WAS detected. This doesn't risk false positives -- the
+        // separate tag-reading OCR pass that runs against the final cropped
+        // region only pulls out real tag names from whatever text is
+        // actually present, so extra empty/unrelated space is harmless, not
+        // misleading.
+        var topPadding = Math.Max(sidePadding, (int)(sourceImageSize.Height * TopExtensionFraction));
         var bottomPadding = Math.Max(sidePadding, (int)(sourceImageSize.Height * BottomExtensionFraction));
 
         var expanded = new Rectangle(
             union.X - sidePadding,
-            union.Y - sidePadding,
+            union.Y - topPadding,
             union.Width + sidePadding * 2,
-            union.Height + sidePadding + bottomPadding);
+            union.Height + topPadding + bottomPadding);
 
         // Clamp to the actual screenshot bounds -- a match near the bottom
         // edge plus a generous downward extension can otherwise push the

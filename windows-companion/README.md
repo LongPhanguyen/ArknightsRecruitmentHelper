@@ -216,18 +216,22 @@ Three independent issues were found during testing and fixed:
     This helped but still fell short at smaller sizes -- the matched
     text's bounding box is a poor proxy for how much room a second row
     actually needs, since it doesn't scale the same way the rest of the
-    UI (chip size, spacing, row gaps) does as the window shrinks. Fixed by
-    making the bottom extension a **fraction of the whole screenshot's
-    height** (22%) instead -- since everything in the UI scales with the
-    window, sizing the extension off the window's own dimensions (rather
-    than the matched text's, which can be much smaller) scales correctly
-    at any window size. The expanded rectangle is clamped to the
-    screenshot's actual bounds afterward, since a match near the edge plus
-    a generous extension can otherwise push it past the image entirely.
-    None of this risks false positives: the separate tag-reading OCR pass
-    that runs against the final cropped region only pulls out real tag
-    names from whatever's actually present, so extra empty space below is
-    harmless.
+    UI (chip size, spacing, row gaps) does as the window shrinks. Second
+    attempt: made the bottom extension a fraction of the whole
+    screenshot's height (22%) instead of the matched text's size, since
+    everything in the UI scales with the window. Still measurably short --
+    a 774x173 debug capture showed only the very top few pixels of a
+    second row's chips (no text, just the rounded-corner edge), meaning
+    22% was itself a guess that undershot by roughly half. **Current
+    values: 50% of screenshot height on the bottom, 18% on top** (top
+    matters less often but is covered too, in case a match ends up
+    anchored to a second row instead of a first). The expanded rectangle
+    is clamped to the screenshot's actual bounds afterward, since a match
+    near an edge plus a generous extension can otherwise push it past the
+    image entirely. None of this risks false positives: the separate
+    tag-reading OCR pass that runs against the final cropped region only
+    pulls out real tag names from whatever's actually present, so extra
+    empty space is harmless.
   - Also: the region is now **re-detected fresh on every single capture**
     (both the initial one right after "Select Emulator Window" and any
     later manual "Capture Tags" click) rather than computing it once and
