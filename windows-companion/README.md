@@ -177,14 +177,28 @@ Three independent issues were found during testing and fixed:
     misfire and drop a single legitimate tag whenever the 5-tag grid's
     natural spread made one corner look statistically distant from the rest
     -- still guessing at a threshold rather than using what's actually known.
-  - The fix that stuck: **only run outlier removal when there are *more*
-    matches than the known 5-tag cap allows.** With 5 or fewer matches,
-    there's no evidence anything is spurious, so all of them are kept
-    unconditionally -- Arknights never shows more than 5 tags, so a set
-    already at or under that cap needs no second-guessing regardless of how
-    spread out it looks. Outlier removal (still centroid-based, for the same
-    reasons as before) only kicks in once there's real evidence of a stray
-    match, i.e. more matches than could possibly all be real.
+  - Then: **only run outlier removal when there are *more* matches than the
+    known 5-tag cap allows.** With 5 or fewer matches, there's no evidence
+    anything is spurious, so all of them are kept unconditionally --
+    Arknights never shows more than 5 tags, so a set already at or under
+    that cap needs no second-guessing regardless of how spread out it
+    looks. Outlier removal (still centroid-based, for the same reasons as
+    before) only kicks in once there's real evidence of a stray match.
+  - Remaining gap this didn't cover: at smaller window sizes, OCR sometimes
+    doesn't recognize a whole second row of tags as text *at all* during
+    region detection (not an outlier/clustering problem -- those 2 tags
+    just never became candidate matches in the first place, confirmed via
+    a debug screenshot showing only 3 of 5 chips in the captured pixels).
+    Log evidence: region height shrank much faster than width as the
+    window got smaller (roughly halved vs. barely changed), consistent
+    with only one row of a 2-row grid being captured. Fixed by making the
+    detected region's *bottom* edge deliberately generous -- extended
+    downward by the matched cluster's own height, specifically to leave
+    room for a second row that this pass didn't manage to read as text.
+    This doesn't risk false positives: the separate tag-reading OCR pass
+    that runs against the final cropped region only pulls out real tag
+    names from whatever's actually present, so extra empty space below is
+    harmless.
 - **A hyphenated tag like `DP-Recovery` could get silently dropped from
   region detection.** OCR sometimes recognizes it as two separate lines
   ("DP" and "Recovery") rather than one. The detector used to check each

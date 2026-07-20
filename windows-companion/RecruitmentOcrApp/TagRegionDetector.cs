@@ -77,14 +77,33 @@ public static class TagRegionDetector
             ? RemoveDistantOutliers(matchedRects)
             : matchedRects;
 
+        var union = inliers.Aggregate(Rectangle.Union);
+
         // Padding scales with the matched text's own size for the same
         // scale-independence reason -- a fixed pixel value that looks right
         // on a small window would be too tight (or too loose) on a large one.
         var averageSize = inliers.Average(r => Math.Max(r.Width, r.Height));
-        var padding = Math.Max(16, (int)(averageSize * 0.6));
+        var sidePadding = Math.Max(16, (int)(averageSize * 0.6));
 
-        var union = inliers.Aggregate(Rectangle.Union);
-        return new TagRegionDetectionResult(Rectangle.Inflate(union, padding, padding), inliers.Count);
+        // The bottom edge gets extra room deliberately: the recruitment tag
+        // grid can have a second row that this OCR pass didn't recognize as
+        // text at all (observed at smaller window sizes), and that row
+        // always sits just below whatever WAS detected. Extending downward
+        // by the matched cluster's own height gives a missed second row
+        // somewhere to be captured. This doesn't risk false positives --
+        // the separate tag-reading OCR pass that runs against the final
+        // cropped region only pulls out real tag names from whatever text
+        // is actually present, so extra empty/unrelated space below is
+        // harmless, not misleading.
+        var bottomPadding = sidePadding + union.Height;
+
+        var expanded = new Rectangle(
+            union.X - sidePadding,
+            union.Y - sidePadding,
+            union.Width + sidePadding * 2,
+            union.Height + sidePadding + bottomPadding);
+
+        return new TagRegionDetectionResult(expanded, inliers.Count);
     }
 
     private static List<Rectangle> RemoveDistantOutliers(List<Rectangle> rects)
